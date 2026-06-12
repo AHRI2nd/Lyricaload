@@ -156,7 +156,18 @@
         catch { return null; }
     }
 
-    // webkitdirectory로 폴더 선택 → .lrc 전부 읽어 정규화 키 맵으로 저장
+    // 파일명(확장자 제외)을 "--" 기준으로 분해. "아티스트--제목" → { a, t, hasSep }
+    function splitName(nameNoExt) {
+        const idx = nameNoExt.indexOf("--");
+        if (idx === -1) return { a: null, t: null, hasSep: false };
+        return {
+            a: normalizeKey(nameNoExt.slice(0, idx)),
+            t: normalizeKey(nameNoExt.slice(idx + 2)),
+            hasSep: true,
+        };
+    }
+
+    // webkitdirectory로 폴더 선택 → .lrc 전부 읽어 파일별 매칭 키와 함께 배열로 저장
     function openFolderPicker(onDone) {
         const input = document.createElement("input");
         input.type = "file";
@@ -167,16 +178,19 @@
             const all = Array.from(e.target.files ?? []);
             const lrcFiles = all.filter((f) => /\.lrc$/i.test(f.name));
             const folderName = all[0]?.webkitRelativePath?.split("/")?.[0] ?? "(폴더)";
-            const files = {};
+            const files = [];
             for (const f of lrcFiles) {
                 try {
                     const parsed = parseLRC(await f.text());
-                    if (parsed.synced || parsed.unsynced) files[normalizeKey(f.name)] = parsed;
+                    if (!parsed.synced && !parsed.unsynced) continue;
+                    const nameNoExt = f.name.replace(/\.[^.]+$/, "");
+                    const { a, t, hasSep } = splitName(nameNoExt);
+                    files.push({ full: normalizeKey(nameNoExt), a, t, hasSep, parsed });
                 } catch (err) {
                     log("폴더 파일 읽기 실패:", f.name, err);
                 }
             }
-            const count = Object.keys(files).length;
+            const count = files.length;
             let ok = true;
             try {
                 storageSet(FOLDER_KEY, JSON.stringify({ name: folderName, count, files }));
@@ -195,21 +209,30 @@
         storageSet(FOLDER_KEY, "null");
     }
 
-    // 현재 곡 메타로 폴더 맵에서 매칭되는 가사를 찾는다 (없으면 null)
+    // 현재 곡 메타로 폴더에서 매칭되는 가사를 찾는다 (없으면 null).
+    // 1순위: "아티스트--제목" 구분자로 두 필드가 정확히 일치(느슨한 충돌을 이걸로 해소)
+    // 2순위: 느슨한 매칭(구분자·순서·공백 무시한 통짜 비교, 제목 단독 허용)
     function matchFromFolder(title, artist) {
         const data = readFolderMap();
-        if (!data?.files) return null;
-        const cands = [];
-        if (artist && title) {
-            cands.push(`${artist}--${title}`, `${artist}-${title}`, `${artist} - ${title}`,
-                       `${artist} ${title}`, `${title}--${artist}`, `${title}-${artist}`, `${title} ${artist}`);
+        if (!Array.isArray(data?.files)) return null;
+        const A = normalizeKey(artist);
+        const T = normalizeKey(title);
+        if (!T) return null;
+
+        // 1) 정확 매칭 — "--"로 구분된 파일명의 아티스트/제목 두 필드가 모두 일치
+        if (A) {
+            const precise = data.files.find(
+                (f) => f.hasSep && ((f.a === A && f.t === T) || (f.a === T && f.t === A))
+            );
+            if (precise) return precise.parsed;
         }
-        if (title) cands.push(title);
-        for (const c of cands) {
-            const hit = data.files[normalizeKey(c)];
-            if (hit) return hit;
-        }
-        return null;
+
+        // 2) 느슨한 매칭 — 정규화한 전체 문자열 비교 (아티스트+제목 / 제목+아티스트 / 제목 단독)
+        const looseKeys = new Set();
+        if (A) { looseKeys.add(A + T); looseKeys.add(T + A); }
+        looseKeys.add(T);
+        const loose = data.files.find((f) => looseKeys.has(f.full));
+        return loose ? loose.parsed : null;
     }
 
     // 수동 캐시 우선, 없으면 폴더 자동 매칭. { entry, source } | null
@@ -258,8 +281,8 @@
             author: "Lyricaload",
             version: ADDON_VERSION,
             description: {
-                en: "Load local .lrc files as synced lyrics for the current track.",
-                ko: "로컬 .lrc 파일을 현재 곡의 동기화 가사로 불러옵니다.",
+                en: "Local .lrc lyrics. Move this provider to the top, then use 'Load .lrc for current track' or 'Set .lrc folder' in settings.",
+                ko: "로컬 .lrc 가사. 이 제공자를 맨 위로 올린 뒤, 설정에서 '현재 곡 .lrc 불러오기' 또는 '.lrc 폴더 지정하기'를 사용하세요.",
             },
             supports: { karaoke: false, synced: true, unsynced: true },
 

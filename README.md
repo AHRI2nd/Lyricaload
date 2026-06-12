@@ -1,129 +1,112 @@
 # Lyricaload
 
-A lyrics-type addon for [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) that loads
-**local `.lrc` files** as synced lyrics for the currently playing track.
+**로컬 `.lrc` 파일을 현재 재생 중인 곡의 가사로 표시하는 [ivLyrics](https://github.com/ivLis-Studio/ivLyrics) 가사 제공자 애드온**
+*A local `.lrc` lyrics provider addon for [ivLyrics](https://github.com/ivLis-Studio/ivLyrics).*
 
-> Pure JavaScript, single file, no build step. Built on the official ivLyrics
-> `LyricsAddonManager` SDK. Distributable via the ivLyrics Marketplace
-> (`ivlyrics-addon` GitHub topic + `manifest.json`).
+---
+
+There is an English introduction at the bottom of this page.
+
+---
+
+## 소개
+
+로컬 `.lrc` 파일을 가사로 띄웁니다.
+**파일을 직접 고르는 수동 방식**과, **폴더를 지정해 곡이 바뀔 때마다 자동으로 찾아주는 방식**을 모두 지원합니다.
+
+### 주요 기능
+
+- 🎵 **수동 불러오기** — 재생 중인 곡에 `.lrc` 파일을 직접 적용
+- 📁 **폴더 자동 매칭** — 폴더를 한 번 지정하면 곡이 바뀔 때마다 `아티스트--제목.lrc`를 자동으로 찾아 적용
+- 💾 **자동 복원** — 곡별로 저장되어, 그 곡으로 돌아오면 다시 표시
+
+### 사용법
+
+1. ivLyrics **설정 → 가사 제공자**에서 **Lyricaload를 목록 맨 위로** 올립니다.
+   > 위에 있는 제공자부터 먼저 시도하므로, 맨 위에 둬야 로컬 가사가 우선 적용됩니다.
+2. **Lyricaload 카드를 펼쳐** 설정 UI를 엽니다.
+3. 원하는 방식으로 가사를 불러옵니다.
+
+**① 수동으로 한 곡씩**
+- 곡을 재생한 상태에서 **`현재 곡 .lrc 불러오기`** 클릭 → `.lrc` 파일 선택 → 즉시 적용됩니다.
+
+**② 폴더로 자동 매칭**
+- **`.lrc 폴더 지정하기`** 클릭 → `.lrc` 파일들이 들어있는 폴더 선택.
+- 이후 곡이 바뀔 때마다 폴더에서 파일명이 일치하는 가사를 **자동으로** 찾아 표시합니다.
+
+### 파일명 규칙
+
+매칭은 공백·대소문자·구분자를 무시하는 **느슨한 방식**이라 아래 형식이 모두 동작합니다.
+
+| 예시 | 매칭 |
+|---|---|
+| `아티스트--제목.lrc` | ✅ 정확 매칭 (권장) |
+| `아티스트 - 제목.lrc` | ✅ 느슨한 매칭 |
+| `아티스트 제목.lrc` | ✅ 느슨한 매칭 |
+| `제목.lrc` (제목만) | ✅ 느슨한 매칭 (동일/유사 제목 및 아티스트와 혼동될 수 있음) |
+
+> **권장: `아티스트--제목.lrc`** — `--` 구분자가 있으면 아티스트·제목을 정확히 구별합니다.
+> 여러 파일이 느슨하게 일치할 때는 **`--`로 정확히 구분된 파일을 우선** 적용하므로, 혼동을 막을 수 있습니다.
+
+### 📌 LRC 파일이 없다면 — Lyrical Sync 추천
+
+동기화된 `.lrc` 파일을 직접 만들고 싶다면, **[Lyrical Sync](https://github.com/AHRI2nd/Lyrical-Sync)** 사용을 추천합니다.
+
+### 설치
+
+ivLyrics **마켓플레이스**에서 `Lyricaload`를 검색해 설치합니다.
+
+> 코드 업데이트 후 동작이 안 바뀌면, 마켓플레이스에서 **제거 → Spotify 재시작 → 재설치 → 재시작** 하세요.
 
 ---
 
 ## English
 
-### What it does
+Show your own `.lrc` files as lyrics for songs.
+Supports both **manually picking a file** and **auto-matching from a folder** on every track change.
 
-- Adds an **`LRC` button** to the lyrics panel.
-- Click it → pick a local `.lrc` file → the lyrics are parsed and shown immediately for the current track.
-- The result is cached per track (`trackId`), so it restores automatically when you return to that song.
-- If no local lyrics exist for a track, Lyricaload returns nothing and ivLyrics **falls back** to its other providers (Spotify, lrclib, …).
+### Features
 
-### LRC parsing
+- 🎵 **Manual load** — apply a `.lrc` file to the currently playing track
+- 📁 **Folder auto-match** — set a folder once; it finds `Artist--Title.lrc` automatically as tracks change
+- 💾 **Auto restore** — cached per track, so it reappears when you return to that song
 
-- `[MM:SS.xxx]` / `[MM:SS,xxx]`, millisecond normalization (`xx → xx0`, `x → x00`)
-- Multiple timestamps on a single line
-- `[offset:N]` tag applied to all timestamps
-- Metadata tags (`[ar:]`, `[ti:]`, `[al:]`, …) ignored
+### How to use
 
-### Installation
+1. In ivLyrics **Settings → Lyrics Providers**, move **Lyricaload to the top** of the list.
+   > Providers are tried top-down, so it must be first for local lyrics to win.
+2. **Expand the Lyricaload card** to open its settings UI.
+3. Load lyrics either way:
 
-**A. ivLyrics Marketplace (recommended)**
+**① Manually, one track at a time**
+- With a song playing, click **`Load .lrc for current track`** → pick a `.lrc` file → applied instantly.
 
-1. Host this repository as a **public** GitHub repo.
-2. Add the GitHub topic **`ivlyrics-addon`**.
-3. Keep `manifest.json` in the repo root and point its `downloadUrl` to the raw `Addon_Lyrics_Local.js`.
-4. In ivLyrics, open **Marketplace** → Refresh → search `Lyricaload` → **Install**.
+**② Automatically from a folder**
+- Click **`Set .lrc folder`** → choose a folder containing `.lrc` files.
+- From then on, matching lyrics are found **automatically** whenever the track changes.
 
-> Installed addons are stored in IndexedDB (`ivLyrics_marketplace`) and auto-loaded on startup.
+### Filename rule
 
-**B. Spicetify extension (local testing, no GitHub)**
+Matching is **loose** — it ignores spaces, case, and separators — so all of these work:
 
-```bash
-cp Addon_Lyrics_Local.js ~/.config/spicetify/Extensions/
-spicetify config extensions Addon_Lyrics_Local.js
-spicetify apply
-```
-
-The script self-registers with `LyricsAddonManager` at startup. To remove later:
-`spicetify config extensions Addon_Lyrics_Local.js-` then `spicetify apply`.
-
-### Architecture
-
-Platform-independent **core** (parser / cache / file picker / button UI) is separated from
-platform-specific **adapters**. Only the ivLyrics adapter is active now; a Spicetify
-(Lyrics Plus) adapter can be added later without touching the core.
-
-| Layer | Responsibility |
+| Example | Match |
 |---|---|
-| Core | `parseLRC`, cache, `openFilePicker`, track id, button UI |
-| Adapter | `name`, `isAvailable()`, `init()`, `applyLyrics(trackId, parsed)` |
+| `Artist--Title.lrc` | ✅ exact (recommended) |
+| `Artist - Title.lrc` | ✅ loose |
+| `artist title.lrc` | ✅ loose |
+| `Title.lrc` (title only) | ✅ loose (may collide with same/similar songs) |
 
-### Status
+> **Recommended: `Artist--Title.lrc`** — the `--` separator distinguishes artist and title precisely.
+> When several files match loosely, the one separated by `--` is **preferred**, avoiding same-title collisions.
 
-- **Phase 1 — manual selection + cache:** done
-- **Phase 2 — folder auto-matching** (settings UI + local static server): planned
-- **Phase 3 — sync offset / saved-list management / translation lines:** future
+### 📌 No LRC files yet? Try Lyrical Sync
+
+To create synced `.lrc` files yourself, recommend to use **[Lyrical Sync](https://github.com/AHRI2nd/Lyrical-Sync)**
+
+### Install
+
+Search for `Lyricaload` in the ivLyrics **Marketplace** and install.
+
+> If behavior doesn't change after an update, **Uninstall → restart Spotify → Install → restart** from the Marketplace.
 
 ---
-
-## 한국어
-
-### 기능
-
-- 가사 패널에 **`LRC` 버튼**을 추가합니다.
-- 클릭 → 로컬 `.lrc` 파일 선택 → 현재 곡의 동기화 가사로 즉시 표시됩니다.
-- 트랙(`trackId`) 단위로 캐시되어, 해당 곡으로 돌아오면 자동 복원됩니다.
-- 로컬 가사가 없으면 아무것도 반환하지 않아, ivLyrics가 다른 프로바이더(Spotify·lrclib 등)로 **폴백**합니다.
-
-### LRC 파싱
-
-- `[MM:SS.xxx]` / `[MM:SS,xxx]`, 밀리초 정규화(`xx → xx0`, `x → x00`)
-- 한 줄 다중 타임스탬프 지원
-- `[offset:N]` 태그를 전체 타임스탬프에 가산
-- 메타 태그(`[ar:]`, `[ti:]`, `[al:]` 등) 무시
-
-### 설치
-
-**A. ivLyrics 마켓플레이스 (권장)**
-
-1. 이 저장소를 **공개** GitHub 저장소로 호스팅합니다.
-2. GitHub 토픽 **`ivlyrics-addon`**을 추가합니다.
-3. `manifest.json`을 저장소 루트에 두고 `downloadUrl`이 raw `Addon_Lyrics_Local.js`를 가리키게 합니다.
-4. ivLyrics에서 **Marketplace** 열기 → 새로고침 → `Lyricaload` 검색 → **Install**.
-
-> 설치된 애드온은 IndexedDB(`ivLyrics_marketplace`)에 저장되어 시작 시 자동 로드됩니다.
-
-**B. Spicetify 확장 (로컬 테스트, GitHub 불필요)**
-
-```bash
-cp Addon_Lyrics_Local.js ~/.config/spicetify/Extensions/
-spicetify config extensions Addon_Lyrics_Local.js
-spicetify apply
-```
-
-스크립트가 시작 시 `LyricsAddonManager`에 스스로 등록됩니다. 제거하려면:
-`spicetify config extensions Addon_Lyrics_Local.js-` 후 `spicetify apply`.
-
-> macOS/Linux는 DevTools 단축키 버그가 있어 콘솔 붙여넣기 대신 이 방식이나 마켓플레이스로 검증하세요.
-
-### 아키텍처
-
-플랫폼 비의존 **코어**(파서·캐시·파일선택·버튼 UI)와 플랫폼 의존 **어댑터**를 분리했습니다.
-현재는 ivLyrics 어댑터만 활성이며, Spicetify(Lyrics Plus) 어댑터는 코어 수정 없이 추가할 수 있습니다.
-
-| 계층 | 역할 |
-|---|---|
-| 코어 | `parseLRC`, 캐시, `openFilePicker`, 트랙 식별, 버튼 UI |
-| 어댑터 | `name`, `isAvailable()`, `init()`, `applyLyrics(trackId, parsed)` |
-
-### 진행 상황
-
-- **Phase 1 — 수동 선택 + 캐시:** 완료
-- **Phase 2 — 폴더 자동 매칭**(설정 UI + 로컬 정적 서버): 예정
-- **Phase 3 — 싱크 오프셋 / 저장 목록 관리 / 번역줄:** 미래
-
----
-
-## License
-
-MIT

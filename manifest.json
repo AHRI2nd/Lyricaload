@@ -4,12 +4,10 @@
       "name": "Lyricaload (Local LRC)",
       "type": "lyrics",
       "author": "Lyricaload",
-      "version": "0.1.4-dev",
+      "version": "1.0.0",
       "updated": "2026-06-12",
-      "description": {
-        "en": "Load local .lrc files as synced lyrics for the current track. Development version, may be unstable.",
-        "ko": "로컬 .lrc 파일을 현재 곡의 동기화 가사로 불러오는 플러그인. 개발중인 테스트 버전으로 불안정 할 수 있습니다."
-      },
+      "description": "https://raw.githubusercontent.com/AHRI2nd/Lyricaload/main/README.md",
+      "preview": "https://raw.githubusercontent.com/AHRI2nd/Lyricaload/main/preview.png",
       "githubUrl": "https://github.com/AHRI2nd/Lyricaload",
       "downloadUrl": "https://raw.githubusercontent.com/AHRI2nd/Lyricaload/main/Addon_Lyrics_Local.js",
       "minAppVersion": ""
