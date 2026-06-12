@@ -277,12 +277,44 @@
         });
     }
 
+    // 재생 바(Playbar) 공식 버튼 — DOM 추정 없이 항상 표시되는 1차 진입점
+    let playbarButton = null;
+    const LRC_ICON =
+        `<svg role="img" height="16" width="16" viewBox="0 0 16 16" fill="currentColor">` +
+        `<path d="M3 1h6l4 4v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm5.5 1H3v12h10V5.5H9a.5.5 0 0 1-.5-.5V2zM4.5 7h7v1h-7V7zm0 2.5h7v1h-7v-1zM4.5 12h4v1h-4v-1z"/>` +
+        `</svg>`;
+
+    function registerPlaybarButton() {
+        if (playbarButton || !Spicetify?.Playbar?.Button) return;
+        try {
+            playbarButton = new Spicetify.Playbar.Button(
+                "Lyricaload: 로컬 .lrc 불러오기",
+                LRC_ICON,
+                () => handleLoadClick(),
+                false,
+                false
+            );
+            log("Playbar 버튼 등록 완료");
+        } catch (e) {
+            log("Playbar 버튼 등록 실패:", e);
+        }
+    }
+
     function updateButtonState() {
-        const btn = document.querySelector(".lyricaload-btn");
-        if (!btn) return;
         const stored = !!getCacheEntry(currentTrackId());
-        btn.classList.toggle("lyricaload-btn--loaded", stored);
-        btn.title = stored ? "로컬 LRC 저장됨 (클릭하면 교체)" : "로컬 .lrc 파일 불러오기";
+
+        if (playbarButton) {
+            playbarButton.active = stored;
+            playbarButton.label = stored
+                ? "Lyricaload: 로컬 LRC 저장됨 (클릭하면 교체)"
+                : "Lyricaload: 로컬 .lrc 불러오기";
+        }
+
+        const btn = document.querySelector(".lyricaload-btn");
+        if (btn) {
+            btn.classList.toggle("lyricaload-btn--loaded", stored);
+            btn.title = stored ? "로컬 LRC 저장됨 (클릭하면 교체)" : "로컬 .lrc 파일 불러오기";
+        }
     }
 
     function createButton() {
@@ -352,10 +384,12 @@
 
     function startUI() {
         injectStyles();
+        registerPlaybarButton(); // 1차 진입점 (항상 표시)
         Spicetify?.Player?.addEventListener?.("songchange", () => updateButtonState());
         const observer = new MutationObserver(() => injectButton());
         observer.observe(document.body, { childList: true, subtree: true });
         injectButton();
+        updateButtonState();
         log("UI 시작");
     }
 
