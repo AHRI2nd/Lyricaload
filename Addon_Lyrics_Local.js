@@ -10,7 +10,7 @@
     "use strict";
 
     const ADDON_ID = "local-lrc";
-    const ADDON_VERSION = "0.1.0";
+    const ADDON_VERSION = "0.1.2";
     const CACHE_KEY = "lyricaload:local-lrc"; // { [trackId]: { synced, unsynced } }
     const LOG_PREFIX = "[Lyricaload]";
 
@@ -291,7 +291,9 @@
                     );
                 }
 
-                return React.createElement(Panel);
+                // ivLyrics Settings.js는 결과를 react.createElement(SettingsUI)로 감싼다 →
+                // 엘리먼트가 아니라 "컴포넌트 함수"를 반환해야 한다.
+                return Panel;
             },
         },
 
