@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs / temp
+*.log
+*.tmp
+tmp/
+
+# Node (빌드 없음 — 혹시 모를 도구 산출물 대비)
+node_modules/
+npm-debug.log*
+
+# Claude 작업 메타
+.claude/
+CLAUDE.md
+dev-log.md
