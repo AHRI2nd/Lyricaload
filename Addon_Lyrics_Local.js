@@ -199,6 +199,100 @@
                     error: null,
                 };
             },
+
+            // ivLyrics가 설정 화면에 렌더하는 공식 UI 표면.
+            // 애드온이 사이드바에 버튼을 직접 추가하는 API는 없으므로 모든 UI를 여기에 둔다.
+            getSettingsUI() {
+                const React = window.Spicetify?.React;
+                if (!React) return null;
+
+                function describe() {
+                    const item = window.Spicetify?.Player?.data?.item;
+                    if (!item?.uri) return { trackId: null, label: "재생 중인 트랙 없음", stored: false };
+                    const trackId = item.uri.split(":")[2];
+                    const title = item.metadata?.title ?? item.name ?? trackId;
+                    const artist = item.metadata?.artist_name ?? "";
+                    return {
+                        trackId,
+                        label: artist ? `${title} — ${artist}` : title,
+                        stored: !!getCacheEntry(trackId),
+                    };
+                }
+
+                function Panel() {
+                    const [cur, setCur] = React.useState(describe());
+                    const [msg, setMsg] = React.useState("");
+
+                    const refresh = () => setCur(describe());
+
+                    const loadForCurrent = () => {
+                        const item = window.Spicetify?.Player?.data?.item;
+                        const trackId = item?.uri?.split(":")?.[2];
+                        if (!trackId) { setMsg("재생 중인 트랙이 없습니다."); return; }
+                        openFilePicker((text) => {
+                            const parsed = parseLRC(text);
+                            if (!parsed.synced && !parsed.unsynced) {
+                                setMsg("유효한 LRC 내용을 찾을 수 없습니다.");
+                                return;
+                            }
+                            const count = parsed.synced?.length ?? parsed.unsynced?.length ?? 0;
+                            const reloaded = ivLyricsAdapter.applyLyrics(trackId, parsed);
+                            refresh();
+                            setMsg(`${count}줄 로드 완료${reloaded ? "" : " (가사 패널을 다시 열면 반영)"}`);
+                        });
+                    };
+
+                    const clearCurrent = () => {
+                        if (!cur.trackId) return;
+                        const all = readCache();
+                        delete all[cur.trackId];
+                        storageSet(CACHE_KEY, JSON.stringify(all));
+                        try {
+                            const item = window.Spicetify?.Player?.data?.item;
+                            window.lyricContainer?.fetchLyrics?.(item, true);
+                        } catch { /* 무시 */ }
+                        refresh();
+                        setMsg("현재 곡의 로컬 LRC를 삭제했습니다.");
+                    };
+
+                    const clearAll = () => {
+                        storageSet(CACHE_KEY, "{}");
+                        refresh();
+                        setMsg("저장된 모든 로컬 LRC를 삭제했습니다.");
+                    };
+
+                    const box = { display: "flex", flexDirection: "column", gap: "10px", padding: "8px 0" };
+                    const row = { display: "flex", gap: "8px", flexWrap: "wrap" };
+                    const btn = {
+                        padding: "8px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                        fontWeight: 700, background: "var(--spice-button, #1db954)", color: "var(--spice-main, #000)",
+                    };
+                    const btnGhost = {
+                        ...btn, background: "transparent", color: "var(--spice-text, #fff)",
+                        border: "1px solid var(--spice-button-disabled, #535353)",
+                    };
+                    const sub = { color: "var(--spice-subtext, #b3b3b3)", fontSize: "13px", margin: 0 };
+
+                    return React.createElement("div", { style: box },
+                        React.createElement("p", { style: sub },
+                            "재생 중인 곡을 선택한 뒤 아래 버튼으로 로컬 .lrc 파일을 불러옵니다. " +
+                            "결과는 곡별로 저장되어 자동 복원됩니다."),
+                        React.createElement("p", { style: { margin: 0, fontWeight: 700 } },
+                            "현재 곡: ", React.createElement("span", { style: { fontWeight: 400 } }, cur.label),
+                            cur.stored
+                                ? React.createElement("span", { style: { color: "var(--spice-button, #1db954)", marginLeft: 8 } }, "● 로컬 LRC 있음")
+                                : null),
+                        React.createElement("div", { style: row },
+                            React.createElement("button", { style: btn, onClick: loadForCurrent }, "현재 곡 .lrc 불러오기"),
+                            React.createElement("button", { style: btnGhost, onClick: refresh }, "새로고침"),
+                            React.createElement("button", { style: btnGhost, onClick: clearCurrent, disabled: !cur.stored }, "현재 곡 삭제"),
+                            React.createElement("button", { style: btnGhost, onClick: clearAll }, "전체 삭제")),
+                        msg ? React.createElement("p", { style: { ...sub, color: "var(--spice-text, #fff)" } }, msg) : null,
+                    );
+                }
+
+                return React.createElement(Panel);
+            },
         },
 
         init() {

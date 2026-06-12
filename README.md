@@ -58,8 +58,6 @@ platform-specific **adapters**. Only the ivLyrics adapter is active now; a Spice
 | Core | `parseLRC`, cache, `openFilePicker`, track id, button UI |
 | Adapter | `name`, `isAvailable()`, `init()`, `applyLyrics(trackId, parsed)` |
 
-See [`CLAUDE.md`](CLAUDE.md) for the full spec and [`dev-log.md`](dev-log.md) for development history.
-
 ### Status
 
 - **Phase 1 — manual selection + cache:** done
@@ -117,8 +115,6 @@ spicetify apply
 |---|---|
 | 코어 | `parseLRC`, 캐시, `openFilePicker`, 트랙 식별, 버튼 UI |
 | 어댑터 | `name`, `isAvailable()`, `init()`, `applyLyrics(trackId, parsed)` |
-
-전체 규격은 [`CLAUDE.md`](CLAUDE.md), 개발 이력은 [`dev-log.md`](dev-log.md)를 참고하세요.
 
 ### 진행 상황
 
