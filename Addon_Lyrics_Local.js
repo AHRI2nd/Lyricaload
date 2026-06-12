@@ -10,8 +10,9 @@
     "use strict";
 
     const ADDON_ID = "local-lrc";
-    const ADDON_VERSION = "0.1.2";
-    const CACHE_KEY = "lyricaload:local-lrc"; // { [trackId]: { synced, unsynced } }
+    const ADDON_VERSION = "0.1.3-dev";
+    const CACHE_KEY = "lyricaload:local-lrc"; // { [trackId]: { synced, unsynced } }  (수동 로드)
+    const FOLDER_KEY = "lyricaload:lrc-folder"; // { name, count, files: { [normKey]: { synced, unsynced } } }
     const LOG_PREFIX = "[Lyricaload]";
 
     function log(...args) {
@@ -123,7 +124,9 @@
     function openFilePicker(onText) {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = ".lrc,text/plain";
+        // macOS 파일창은 accept에 MIME가 섞이면 확장자 필터를 무시해 .lrc를 비활성화한다.
+        // 확장자 토큰만 둔다.
+        input.accept = ".lrc,.txt";
         input.style.display = "none";
         input.onchange = (e) => {
             const file = e.target.files?.[0];
@@ -135,6 +138,87 @@
         };
         document.body.appendChild(input);
         input.click();
+    }
+
+    // ─── 폴더 지정 / 자동 매칭 (Phase 2) ─────────────────────────────────────
+
+    // 파일명·곡명을 비교용 키로 정규화: 확장자 제거 → 소문자 → 영숫자/문자 외 모두 제거.
+    // "아티스트--제목.lrc", "아티스트 - 제목", "Artist-Title" 등이 모두 같은 키로 수렴한다.
+    function normalizeKey(s) {
+        return String(s ?? "")
+            .toLowerCase()
+            .replace(/\.[a-z0-9]+$/i, "")
+            .replace(/[^\p{L}\p{N}]/gu, "");
+    }
+
+    function readFolderMap() {
+        try { return JSON.parse(storageGet(FOLDER_KEY) ?? "null"); }
+        catch { return null; }
+    }
+
+    // webkitdirectory로 폴더 선택 → .lrc 전부 읽어 정규화 키 맵으로 저장
+    function openFolderPicker(onDone) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.webkitdirectory = true;
+        input.multiple = true;
+        input.style.display = "none";
+        input.onchange = async (e) => {
+            const all = Array.from(e.target.files ?? []);
+            const lrcFiles = all.filter((f) => /\.lrc$/i.test(f.name));
+            const folderName = all[0]?.webkitRelativePath?.split("/")?.[0] ?? "(폴더)";
+            const files = {};
+            for (const f of lrcFiles) {
+                try {
+                    const parsed = parseLRC(await f.text());
+                    if (parsed.synced || parsed.unsynced) files[normalizeKey(f.name)] = parsed;
+                } catch (err) {
+                    log("폴더 파일 읽기 실패:", f.name, err);
+                }
+            }
+            const count = Object.keys(files).length;
+            let ok = true;
+            try {
+                storageSet(FOLDER_KEY, JSON.stringify({ name: folderName, count, files }));
+            } catch (err) {
+                ok = false; // 용량 초과 등
+                log("폴더 저장 실패:", err);
+            }
+            input.remove();
+            onDone?.({ ok, folderName, count, scanned: lrcFiles.length });
+        };
+        document.body.appendChild(input);
+        input.click();
+    }
+
+    function removeFolder() {
+        storageSet(FOLDER_KEY, "null");
+    }
+
+    // 현재 곡 메타로 폴더 맵에서 매칭되는 가사를 찾는다 (없으면 null)
+    function matchFromFolder(title, artist) {
+        const data = readFolderMap();
+        if (!data?.files) return null;
+        const cands = [];
+        if (artist && title) {
+            cands.push(`${artist}--${title}`, `${artist}-${title}`, `${artist} - ${title}`,
+                       `${artist} ${title}`, `${title}--${artist}`, `${title}-${artist}`, `${title} ${artist}`);
+        }
+        if (title) cands.push(title);
+        for (const c of cands) {
+            const hit = data.files[normalizeKey(c)];
+            if (hit) return hit;
+        }
+        return null;
+    }
+
+    // 수동 캐시 우선, 없으면 폴더 자동 매칭. { entry, source } | null
+    function resolveEntry(trackId, title, artist) {
+        const manual = getCacheEntry(trackId);
+        if (manual) return { entry: manual, source: "manual" };
+        const folder = matchFromFolder(title, artist);
+        if (folder) return { entry: folder, source: "folder" };
+        return null;
     }
 
     // ─── 트랙 식별 유틸 ──────────────────────────────────────────────────────
@@ -185,14 +269,16 @@
 
             async getLyrics(info) {
                 const trackId = trackIdFromInfo(info);
-                const entry = getCacheEntry(trackId);
-                if (!entry) {
-                    // 캐시 미스 → 빈 결과로 다음 프로바이더 폴백 유도
-                    return { uri: info?.uri, provider: "Lyricaload", synced: null, unsynced: null, error: null };
+                const resolved = resolveEntry(trackId, info?.title, info?.artist);
+                if (!resolved) {
+                    // 매칭 없음 → 빈 결과로 다음 제공자 폴백. skipCache로 음성 결과 캐시 방지
+                    // (나중에 폴더를 지정하면 재조회되도록).
+                    return { uri: info?.uri, provider: "Lyricaload", synced: null, unsynced: null, error: null, skipCache: true };
                 }
+                const { entry, source } = resolved;
                 return {
                     uri: info?.uri,
-                    provider: "Lyricaload (Local)",
+                    provider: source === "folder" ? "Lyricaload (Folder)" : "Lyricaload (Local)",
                     synced: entry.synced ?? null,
                     unsynced: entry.unsynced ?? null,
                     copyright: "",
@@ -208,22 +294,36 @@
 
                 function describe() {
                     const item = window.Spicetify?.Player?.data?.item;
-                    if (!item?.uri) return { trackId: null, label: "재생 중인 트랙 없음", stored: false };
+                    if (!item?.uri) return { trackId: null, label: "재생 중인 트랙 없음", source: null };
                     const trackId = item.uri.split(":")[2];
                     const title = item.metadata?.title ?? item.name ?? trackId;
                     const artist = item.metadata?.artist_name ?? "";
+                    const resolved = resolveEntry(trackId, title, artist);
                     return {
                         trackId,
                         label: artist ? `${title} — ${artist}` : title,
-                        stored: !!getCacheEntry(trackId),
+                        source: resolved?.source ?? null, // "manual" | "folder" | null
                     };
+                }
+
+                function describeFolder() {
+                    const data = readFolderMap();
+                    return data?.files ? { name: data.name, count: data.count } : null;
+                }
+
+                function forceReloadCurrent() {
+                    try {
+                        const item = window.Spicetify?.Player?.data?.item;
+                        window.lyricContainer?.fetchLyrics?.(item, true);
+                    } catch { /* 무시 */ }
                 }
 
                 function Panel() {
                     const [cur, setCur] = React.useState(describe());
+                    const [folder, setFolder] = React.useState(describeFolder());
                     const [msg, setMsg] = React.useState("");
 
-                    const refresh = () => setCur(describe());
+                    const refresh = () => { setCur(describe()); setFolder(describeFolder()); };
 
                     const loadForCurrent = () => {
                         const item = window.Spicetify?.Player?.data?.item;
@@ -242,23 +342,38 @@
                         });
                     };
 
+                    const pickFolder = () => {
+                        setMsg("폴더 읽는 중…");
+                        openFolderPicker((r) => {
+                            if (!r.ok) { setMsg("폴더가 너무 커서 저장에 실패했습니다. 더 작은 폴더를 사용하세요."); return; }
+                            forceReloadCurrent(); // 현재 곡 즉시 재매칭
+                            refresh();
+                            setMsg(`폴더 "${r.folderName}" 등록 — .lrc ${r.count}개 (스캔 ${r.scanned}개)`);
+                        });
+                    };
+
+                    const unsetFolder = () => {
+                        removeFolder();
+                        forceReloadCurrent();
+                        refresh();
+                        setMsg("폴더 지정을 해제했습니다.");
+                    };
+
                     const clearCurrent = () => {
                         if (!cur.trackId) return;
                         const all = readCache();
                         delete all[cur.trackId];
                         storageSet(CACHE_KEY, JSON.stringify(all));
-                        try {
-                            const item = window.Spicetify?.Player?.data?.item;
-                            window.lyricContainer?.fetchLyrics?.(item, true);
-                        } catch { /* 무시 */ }
+                        forceReloadCurrent();
                         refresh();
-                        setMsg("현재 곡의 로컬 LRC를 삭제했습니다.");
+                        setMsg("현재 곡의 수동 LRC를 삭제했습니다.");
                     };
 
                     const clearAll = () => {
                         storageSet(CACHE_KEY, "{}");
+                        forceReloadCurrent();
                         refresh();
-                        setMsg("저장된 모든 로컬 LRC를 삭제했습니다.");
+                        setMsg("저장된 모든 수동 LRC를 삭제했습니다.");
                     };
 
                     const box = { display: "flex", flexDirection: "column", gap: "10px", padding: "8px 0" };
@@ -272,21 +387,42 @@
                         border: "1px solid var(--spice-button-disabled, #535353)",
                     };
                     const sub = { color: "var(--spice-subtext, #b3b3b3)", fontSize: "13px", margin: 0 };
+                    const hr = { border: "none", borderTop: "1px solid var(--spice-button-disabled, #333)", margin: "4px 0" };
+                    const sourceTag = cur.source === "manual"
+                        ? React.createElement("span", { style: { color: "var(--spice-button, #1db954)", marginLeft: 8 } }, "● 수동 LRC")
+                        : cur.source === "folder"
+                            ? React.createElement("span", { style: { color: "#4ea1ff", marginLeft: 8 } }, "● 폴더 매칭")
+                            : React.createElement("span", { style: { color: "var(--spice-subtext, #b3b3b3)", marginLeft: 8 } }, "○ 없음");
 
                     return React.createElement("div", { style: box },
-                        React.createElement("p", { style: sub },
-                            "재생 중인 곡을 선택한 뒤 아래 버튼으로 로컬 .lrc 파일을 불러옵니다. " +
-                            "결과는 곡별로 저장되어 자동 복원됩니다."),
+                        // 현재 곡 상태
                         React.createElement("p", { style: { margin: 0, fontWeight: 700 } },
-                            "현재 곡: ", React.createElement("span", { style: { fontWeight: 400 } }, cur.label),
-                            cur.stored
-                                ? React.createElement("span", { style: { color: "var(--spice-button, #1db954)", marginLeft: 8 } }, "● 로컬 LRC 있음")
-                                : null),
+                            "현재 곡: ", React.createElement("span", { style: { fontWeight: 400 } }, cur.label), sourceTag),
+
+                        // 수동 로드
+                        React.createElement("p", { style: sub },
+                            "재생 중인 곡에 로컬 .lrc 파일을 직접 불러옵니다. 곡별로 저장되어 자동 복원됩니다."),
                         React.createElement("div", { style: row },
                             React.createElement("button", { style: btn, onClick: loadForCurrent }, "현재 곡 .lrc 불러오기"),
                             React.createElement("button", { style: btnGhost, onClick: refresh }, "새로고침"),
-                            React.createElement("button", { style: btnGhost, onClick: clearCurrent, disabled: !cur.stored }, "현재 곡 삭제"),
-                            React.createElement("button", { style: btnGhost, onClick: clearAll }, "전체 삭제")),
+                            React.createElement("button", { style: btnGhost, onClick: clearCurrent, disabled: cur.source !== "manual" }, "현재 곡 삭제"),
+                            React.createElement("button", { style: btnGhost, onClick: clearAll }, "수동 전체 삭제")),
+
+                        React.createElement("hr", { style: hr }),
+
+                        // 폴더 자동 매칭
+                        React.createElement("p", { style: sub },
+                            "폴더를 지정하면 곡이 바뀔 때마다 \"아티스트--제목.lrc\" 형식의 파일을 자동으로 찾아 적용합니다. " +
+                            "이 가사 제공자를 목록 맨 위로 올려야 다른 제공자보다 먼저 적용됩니다."),
+                        React.createElement("p", { style: { margin: 0 } },
+                            "지정 폴더: ",
+                            folder
+                                ? React.createElement("span", { style: { fontWeight: 700 } }, `${folder.name} (.lrc ${folder.count}개)`)
+                                : React.createElement("span", { style: { color: "var(--spice-subtext, #b3b3b3)" } }, "지정 안 됨")),
+                        React.createElement("div", { style: row },
+                            React.createElement("button", { style: btn, onClick: pickFolder }, ".lrc 폴더 지정하기"),
+                            React.createElement("button", { style: btnGhost, onClick: unsetFolder, disabled: !folder }, "폴더 해제")),
+
                         msg ? React.createElement("p", { style: { ...sub, color: "var(--spice-text, #fff)" } }, msg) : null,
                     );
                 }

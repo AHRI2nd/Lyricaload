@@ -4,7 +4,7 @@
       "name": "Lyricaload (Local LRC)",
       "type": "lyrics",
       "author": "Lyricaload",
-      "version": "0.1.3-dev",
+      "version": "0.1.4-dev",
       "updated": "2026-06-12",
       "description": {
         "en": "Load local .lrc files as synced lyrics for the current track. Development version, may be unstable.",
