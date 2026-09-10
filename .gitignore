@@ -24,7 +24,9 @@ tmp/
 node_modules/
 npm-debug.log*
 
-# Claude 작업 메타
+# etc
 .claude/
 CLAUDE.md
 dev-log.md
+Transfer.md
+AGENTS.md
